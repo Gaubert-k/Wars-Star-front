@@ -1,0 +1,26 @@
+// src/translations/es.json
+{
+  "app_name": "Mi Aplicación",
+  "welcome": "Bienvenido",
+  "login": "Iniciar sesión",
+  "register": "Registrarse",
+  "settings": "Configuración",
+  "profile": "Perfil",
+  "language": "Idioma",
+  "dark_mode": "Modo oscuro",
+  "notifications": "Notificaciones",
+  "logout": "Cerrar sesión",
+  "version": "Versión {version}",
+  "enable_notifications": "Activar notificaciones",
+  "appearance": "Apariencia",
+  "loading": "Cargando...",
+  "back": "Volver",
+  "save": "Guardar",
+  "cancel": "Cancelar",
+  "confirm": "Confirmar",
+  "error": "Error",
+  "success": "Éxito",
+  "confirm_logout": "¿Estás seguro de que quieres cerrar sesión?",
+  "logout_button": "Cerrar sesión",
+  "cancel_button": "Cancelar"
+}

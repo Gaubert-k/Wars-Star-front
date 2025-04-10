@@ -1,0 +1,26 @@
+// src/translations/fr.json
+{
+  "app_name": "Mon Application",
+  "welcome": "Bienvenue",
+  "login": "Connexion",
+  "register": "Inscription",
+  "settings": "Paramètres",
+  "profile": "Profil",
+  "language": "Langue",
+  "dark_mode": "Mode sombre",
+  "notifications": "Notifications",
+  "logout": "Déconnexion",
+  "version": "Version {version}",
+  "enable_notifications": "Activer les notifications",
+  "appearance": "Apparence",
+  "loading": "Chargement...",
+  "back": "Retour",
+  "save": "Enregistrer",
+  "cancel": "Annuler",
+  "confirm": "Confirmer",
+  "error": "Erreur",
+  "success": "Succès",
+  "confirm_logout": "Êtes-vous sûr de vouloir vous déconnecter?",
+  "logout_button": "Déconnecter",
+  "cancel_button": "Annuler"
+}

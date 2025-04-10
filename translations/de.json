@@ -1,0 +1,26 @@
+// src/translations/de.json
+{
+  "app_name": "Meine Anwendung",
+  "welcome": "Willkommen",
+  "login": "Anmelden",
+  "register": "Registrieren",
+  "settings": "Einstellungen",
+  "profile": "Profil",
+  "language": "Sprache",
+  "dark_mode": "Dunkler Modus",
+  "notifications": "Benachrichtigungen",
+  "logout": "Abmelden",
+  "version": "Version {version}",
+  "enable_notifications": "Benachrichtigungen aktivieren",
+  "appearance": "Erscheinungsbild",
+  "loading": "Wird geladen...",
+  "back": "Zurück",
+  "save": "Speichern",
+  "cancel": "Abbrechen",
+  "confirm": "Bestätigen",
+  "error": "Fehler",
+  "success": "Erfolg",
+  "confirm_logout": "Sind Sie sicher, dass Sie sich abmelden möchten?",
+  "logout_button": "Abmelden",
+  "cancel_button": "Abbrechen"
+}
