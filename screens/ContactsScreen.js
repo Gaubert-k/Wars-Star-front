@@ -47,6 +47,7 @@ const ContactsScreen = ({ navigation }) => {
         getUserData();
     }, []);
 
+
     useEffect(() => {
         // Charger les amis de l'utilisateur seulement si on a le numéro de téléphone
         const fetchFriends = async () => {
@@ -185,27 +186,28 @@ const ContactsScreen = ({ navigation }) => {
     });
 
     const renderFriendItem = ({ item }) => {
-        const displayName = item.first_name && item.last_name
-            ? `${item.first_name} ${item.last_name}`
-            : item.phone;
-
         return (
             <TouchableOpacity
-                style={styles.contactItem}
-                onPress={() => navigation.navigate('Chat', { friendId: item._id, friendPhone: item.phone, friendName: displayName })}
+                style={styles.friendItem}
+                onPress={() => navigation.navigate('ContactDetail', { contact: item, userPhone: userPhone })}
             >
-                {item.logo ? (
-                    <Image source={{ uri: item.logo }} style={styles.contactImage} />
-                ) : (
-                    <View style={styles.contactImagePlaceholder}>
-                        <Text style={styles.contactImageText}>
-                            {item.first_name ? item.first_name.charAt(0).toUpperCase() : '#'}
-                        </Text>
-                    </View>
-                )}
-                <View style={styles.contactInfo}>
-                    <Text style={styles.contactName}>{displayName}</Text>
-                    <Text style={styles.contactPhone}>{item.phone}</Text>
+                {/* Votre code existant pour afficher le contact */}
+                <View style={styles.avatarContainer}>
+                    {item.logo ? (
+                        <Image source={{ uri: item.logo }} style={styles.avatar} />
+                    ) : (
+                        <View style={[styles.avatar, styles.noAvatar]}>
+                            <Text style={styles.avatarText}>
+                                {item.first_name.charAt(0).toUpperCase() || '?'}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+                <View style={styles.friendDetails}>
+                    <Text style={styles.friendName}>
+                        {`${item.first_name || ''} ${item.last_name || ''}`}
+                    </Text>
+                    <Text style={styles.friendPhone}>{item.phone_friend}</Text>
                 </View>
             </TouchableOpacity>
         );
