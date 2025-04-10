@@ -22,3 +22,30 @@ export const createUser = async (userData) => {
         throw error;
     }
 };
+
+export const getMessages = async (senderPhone) => {
+    try {
+        const response = await axios.get(`${API_URL}/messages/${senderPhone}`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const sendMessage = async (messageData) => {
+    try {
+        const response = await axios.post(`${API_URL}/messages`, messageData);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const getFriends = async (userPhone) => {
+    try {
+        const response = await axios.get(`${API_URL}/friends/${userPhone}`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};

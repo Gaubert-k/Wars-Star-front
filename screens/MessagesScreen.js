@@ -1,134 +1,311 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, Button } from 'react-native';
+// screens/MessagesScreen.js
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import ConversationsList from '../components/ConversationsList';
+import { getMessages, getFriends } from '../services/api';
 
-const MessagesScreen = () => {
-  // Exemple d’état local pour gérer les messages
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
+const MessagesScreen = ({ navigation }) => {
+  const [conversations, setConversations] = useState([]);
+  const [userPhone, setUserPhone] = useState('0123456789');
+  const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newContactPhone, setNewContactPhone] = useState('');
 
-  // Au montage, on peut récupérer la liste depuis l’API
   useEffect(() => {
-    fetchMessages();
-  }, []);
+    fetchMessages(userPhone);
 
-  // Fonction pour récupérer les messages
-  const fetchMessages = async () => {
+    // Rafraîchir lors du focus de l'écran
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchMessages(userPhone);
+    });
+
+    return unsubscribe;
+  }, [navigation, userPhone]);
+
+  const fetchMessages = async (phone) => {
+    setLoading(true);
     try {
-      // Adapter l'URL au backend
-      const response = await fetch('http://localhost:3001/api/messages');
-      const data = await response.json();
-      setMessages(data);
+      // Récupérer tous les amis (contacts)
+      const friends = await getFriends(phone);
+
+      // Pour chaque ami, récupérer les messages
+      const conversationsData = [];
+
+      if (friends && friends.length > 0) {
+        // Créer un tableau de promesses pour récupérer tous les messages en parallèle
+        const messagePromises = friends.map(friend =>
+            getMessages(friend.phone_friend)
+        );
+
+        // Attendre que toutes les promesses soient résolues
+        const messageResponses = await Promise.all(messagePromises);
+
+        // Traiter les réponses
+        for (let i = 0; i < friends.length; i++) {
+          const friend = friends[i];
+          const messages = messageResponses[i];
+
+          if (messages && messages.length > 0) {
+            // Trier les messages par date
+            const sortedMessages = messages.sort((a, b) =>
+                new Date(b.time) - new Date(a.time)
+            );
+
+            // Ajouter à la liste des conversations
+            conversationsData.push({
+              sender: friend.phone_friend,
+              first_name: friend.first_name || 'Contact',
+              last_name: friend.last_name || '',
+              lastMessage: sortedMessages[0]
+            });
+          } else {
+            // Ajouter le contact même s'il n'y a pas de messages
+            conversationsData.push({
+              sender: friend.phone_friend,
+              first_name: friend.first_name || 'Contact',
+              last_name: friend.last_name || '',
+              lastMessage: {
+                content: 'Commencer une conversation',
+                time: new Date().toISOString(),
+                is_read: true
+              }
+            });
+          }
+        }
+
+        // Trier les conversations par heure du dernier message
+        const sortedConversations = conversationsData.sort((a, b) =>
+            new Date(b.lastMessage.time) - new Date(a.lastMessage.time)
+        );
+
+        setConversations(sortedConversations);
+      }
     } catch (error) {
-      console.error('Erreur fetch messages:', error);
+      console.error('Erreur lors de la récupération des messages :', error);
+      Alert.alert('Erreur', 'Impossible de charger les conversations');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Fonction pour envoyer un nouveau message
-  const sendMessage = async () => {
-    try {
-      // Idéalement, tu récupères l'ID de l'émetteur depuis ton store / context
-      const response = await fetch('http://localhost:3001/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: 1,  // Id fictif de l’émetteur
-          to: 2,    // Id fictif du destinataire
-          text: newMessage
-        }),
-      });
-      const data = await response.json();
-
-      // On ajoute le message au tableau local
-      setMessages((prev) => [...prev, data]);
-      setNewMessage('');
-    } catch (error) {
-      console.error('Erreur envoi message:', error);
-    }
+  const handleNewConversation = () => {
+    setModalVisible(true);
   };
 
-  // Rendu d’un seul message
-  const renderMessageItem = ({ item }) => {
+  const handleAddContact = () => {
+    // Vérifier que le numéro de téléphone est valide
+    if (!newContactPhone || newContactPhone.length < 5) {
+      Alert.alert('Erreur', 'Veuillez entrer un numéro de téléphone valide');
+      return;
+    }
+
+    // Fermer la modal
+    setModalVisible(false);
+
+    // Réinitialiser le champ
+    const phoneToUse = newContactPhone;
+    setNewContactPhone('');
+
+    // Naviguer vers la conversation avec ce contact - noter le nom de l'écran corrigé
+    navigation.navigate('Conversation', {
+      contact: {
+        phone_friend: phoneToUse,
+        first_name: 'Contact',
+        last_name: ''
+      },
+      userPhone: userPhone
+    });
+
+  };
+
+
+  if (loading) {
     return (
-      <View style={styles.messageItem}>
-        <Text style={styles.messageText}>{item.text}</Text>
-        <Text style={styles.meta}>
-          from: {item.from} | to: {item.to}
-        </Text>
-      </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#075E54" />
+        </View>
     );
-  };
+  }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Messages</Text>
-      
-      {/* Liste des messages */}
-      <FlatList
-        data={messages}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderMessageItem}
-        style={styles.list}
-      />
+      <View style={styles.container}>
+        {conversations.length > 0 ? (
+            <ConversationsList
+                conversations={conversations}
+                navigation={navigation}
+                userPhone={userPhone}
+            />
+        ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Aucune conversation</Text>
+            </View>
+        )}
 
-      {/* Section pour rédiger un message */}
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Écrire un nouveau message..."
-          value={newMessage}
-          onChangeText={setNewMessage}
-        />
-        <Button title="Envoyer" onPress={sendMessage} />
+        {/* Bouton d'ajout de nouvelle conversation */}
+        <TouchableOpacity
+            style={styles.newConversationButton}
+            onPress={handleNewConversation}
+        >
+          <Ionicons name="add" size={30} color="white" />
+        </TouchableOpacity>
+
+        {/* Modal pour ajouter un nouveau contact */}
+        <Modal
+            animationType="slide"
+            transparent={true}
+            visible={modalVisible}
+            onRequestClose={() => setModalVisible(false)}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={styles.modalContainer}
+            >
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Nouvelle conversation</Text>
+
+                <TextInput
+                    style={styles.input}
+                    placeholder="Numéro de téléphone"
+                    keyboardType="phone-pad"
+                    value={newContactPhone}
+                    onChangeText={setNewContactPhone}
+                    autoFocus={true}
+                />
+
+                <View style={styles.buttonContainer}>
+                  <TouchableOpacity
+                      style={[styles.button, styles.cancelButton]}
+                      onPress={() => {
+                        setModalVisible(false);
+                        setNewContactPhone('');
+                      }}
+                  >
+                    <Text style={styles.buttonText}>Annuler</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                      style={[styles.button, styles.addButton]}
+                      onPress={handleAddContact}
+                  >
+                    <Text style={styles.buttonText}>Discuter</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          </TouchableWithoutFeedback>
+        </Modal>
       </View>
-    </View>
   );
 };
-
-export default MessagesScreen;
-
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
     backgroundColor: '#F5F5F5',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    alignSelf: 'center',
-  },
-  list: {
+  loadingContainer: {
     flex: 1,
-    marginBottom: 16,
-  },
-  messageItem: {
-    backgroundColor: '#fff',
-    padding: 12,
-    marginVertical: 4,
-    borderRadius: 6,
-    elevation: 1,
-  },
-  messageText: {
-    fontSize: 16,
-  },
-  meta: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  inputContainer: {
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  input: {
+  emptyContainer: {
     flex: 1,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 10,
-    marginRight: 8,
-    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+  emptyText: {
+    fontSize: 16,
+    color: '#888888',
+  },
+  newConversationButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    backgroundColor: '#075E54',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#075E54'
+  },
+  input: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 5,
+    padding: 10,
+    marginVertical: 8
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 15
+  },
+  button: {
+    padding: 10,
+    borderRadius: 5,
+    width: '45%',
+    alignItems: 'center'
+  },
+  cancelButton: {
+    backgroundColor: '#ccc'
+  },
+  addButton: {
+    backgroundColor: '#075E54'
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: 'bold'
+  }
 });
+
+export default MessagesScreen;
