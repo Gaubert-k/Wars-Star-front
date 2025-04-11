@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import AppNavigator from './navigation/AppNavigator';
 import LoadingSpinner from './components/common/LoadingSpinner';
-import { checkAuthStatus } from './services/authService';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+const AUTH_KEY = 'user_auth_data';
 
 export default function App() {
     const [isLoading, setIsLoading] = useState(true);
