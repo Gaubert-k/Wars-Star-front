@@ -17,9 +17,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ConversationsList from '../components/ConversationsList';
-import { getMessages, checkUserExists } from '../services/api';
+import { getMessages, checkUserExists, checkAndHandleAuth, addFriend } from '../services/api';
+import { useTheme } from '../utils/ThemeContext';
+
+const AUTH_KEY = 'user_auth_data';
 
 const MessagesScreen = ({ navigation }) => {
+  const { theme } = useTheme();
   const [conversations, setConversations] = useState([]);
   const [userPhone, setUserPhone] = useState('');
   const [loading, setLoading] = useState(true);
@@ -48,8 +52,7 @@ const MessagesScreen = ({ navigation }) => {
       return null;
     }
   };
-
-
+  // Nous utilisons la fonction checkAndHandleAuth importée de api.js
   // Chargement initial
   useEffect(() => {
     const loadInitialData = async () => {
@@ -65,8 +68,6 @@ const MessagesScreen = ({ navigation }) => {
     };
 
     loadInitialData();
-
-    // Le reste de votre code...
   }, [navigation]);
 
 
@@ -184,9 +185,7 @@ const MessagesScreen = ({ navigation }) => {
     } else {
       setRefreshing(false);
     }
-  };
-
-  // Fonction pour démarrer une nouvelle conversation
+  };  // Fonction pour démarrer une nouvelle conversation
   const handleNewConversation = async () => {
     if (!newContactPhone || newContactPhone.trim() === '') {
       Alert.alert('Erreur', 'Veuillez entrer un numéro de téléphone valide');
@@ -194,19 +193,67 @@ const MessagesScreen = ({ navigation }) => {
     }
 
     try {
+      // Étape 1: Vérifier que l'utilisateur existe
       const result = await checkUserExists(newContactPhone.trim());
       if (result && result.user) {
-        setModalVisible(false);
-        setNewContactPhone('');
+        setLoading(true); // Afficher le chargement pendant l'ajout du contact
 
-        navigation.navigate('Conversation', {
-          contact: {
-            phone_friend: newContactPhone.trim(),
-            first_name: result.user.first_name || 'Contact',
-            last_name: result.user.last_name || newContactPhone.trim()
-          },
-          userPhone: userPhone
-        });
+        try {
+          // Vérifier que les numéros de téléphone sont différents
+          if (userPhone === newContactPhone.trim()) {
+            Alert.alert('Erreur', 'Vous ne pouvez pas vous ajouter comme contact');
+            setLoading(false);
+            return;
+          }
+          
+          // Étape 2: Ajouter l'utilisateur comme contact/ami avec les bons paramètres
+          // Important: s'assurer que user_phone et phone_friend sont correctement formatés
+          await addFriend(userPhone, newContactPhone.trim());
+          console.log('Contact ajouté avec succès:', newContactPhone.trim());
+          
+          // Étape 3: Fermer la modale et naviguer vers la conversation
+          setModalVisible(false);
+          setNewContactPhone('');
+
+          navigation.navigate('Conversation', {
+            contact: {
+              phone_friend: newContactPhone.trim(),
+              first_name: result.user.first_name || 'Contact',
+              last_name: result.user.last_name || newContactPhone.trim()
+            },
+            userPhone: userPhone
+          });
+        } catch (addError) {
+          console.error('Erreur lors de l\'ajout du contact:', addError);
+          if (addError.response?.status === 400) {
+            // Le contact existe peut-être déjà
+            Alert.alert(
+              'Information', 
+              'Ce contact existe peut-être déjà ou une autre erreur est survenue. Navigation vers la conversation...',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    setModalVisible(false);
+                    setNewContactPhone('');
+                    navigation.navigate('Conversation', {
+                      contact: {
+                        phone_friend: newContactPhone.trim(),
+                        first_name: result.user.first_name || 'Contact',
+                        last_name: result.user.last_name || newContactPhone.trim()
+                      },
+                      userPhone: userPhone
+                    });
+                  }
+                }
+              ]
+            );
+          } else {
+            Alert.alert('Erreur', 'Impossible d\'ajouter ce contact, réessayez plus tard');
+          }
+        } finally {
+          setLoading(false);
+        }
       } else {
         Alert.alert('Erreur', 'Ce contact n\'existe pas dans l\'application');
       }
@@ -215,21 +262,66 @@ const MessagesScreen = ({ navigation }) => {
       Alert.alert('Erreur', 'Impossible de vérifier ce contact, réessayez plus tard');
     }
   };
+  // Styles dynamiques basés sur le thème actuel
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.backgroundColor,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.backgroundColor,
+    },
+    loadingText: {
+      marginTop: 10,
+      fontSize: 16,
+      color: theme.textColor,
+    },
+    noMessagesText: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: theme.textColor,
+      marginTop: 20,
+    },
+    startNewText: {
+      fontSize: 14,
+      color: theme.placeholderTextColor,
+      marginTop: 8,
+    },
+    newMessageButton: {
+      position: 'absolute',
+      bottom: 20,
+      right: 20,
+      backgroundColor: theme.primaryColor,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      justifyContent: 'center',
+      alignItems: 'center',
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 3,
+    },
+  });
 
   return (
-      <View style={styles.container}>
+      <View style={dynamicStyles.container}>
         {loading && !refreshing ? (
-            <View style={styles.centered}>
-              <ActivityIndicator size="large" color="#075E54" />
-              <Text style={styles.loadingText}>Chargement des conversations...</Text>
+            <View style={dynamicStyles.centered}>
+              <ActivityIndicator size="large" color={theme.primaryColor} />
+              <Text style={dynamicStyles.loadingText}>Chargement des conversations...</Text>
             </View>
         ) : (
             <>
               {conversations.length === 0 ? (
-                  <View style={styles.centered}>
-                    <Ionicons name="chatbubble-ellipses-outline" size={100} color="#075E54" />
-                    <Text style={styles.noMessagesText}>Aucune conversation</Text>
-                    <Text style={styles.startNewText}>Commencez une nouvelle conversation</Text>
+                  <View style={dynamicStyles.centered}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={100} color={theme.primaryColor} />
+                    <Text style={dynamicStyles.noMessagesText}>Aucune conversation</Text>
+                    <Text style={dynamicStyles.startNewText}>Commencez une nouvelle conversation</Text>
                   </View>
               ) : (
                   <ConversationsList
@@ -242,7 +334,7 @@ const MessagesScreen = ({ navigation }) => {
               )}
 
               <TouchableOpacity
-                  style={styles.newMessageButton}
+                  style={dynamicStyles.newMessageButton}
                   onPress={() => setModalVisible(true)}
               >
                 <Ionicons name="create" size={24} color="white" />

@@ -1,7 +1,8 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://89.80.190.158:5000/api';
+export const API_URL = 'http://89.80.190.158:5000/api';
+export const AUTH_KEY = 'user_auth_data';
 
 export const checkAndHandleAuth = async (navigation) => {
     try {
@@ -102,6 +103,19 @@ export const getFriends = async (userPhone) => {
         const response = await axios.get(`${API_URL}/friends/${userPhone}`);
         return response.data;
     } catch (error) {
+        throw error;
+    }
+};
+
+export const addFriend = async (userPhone, friendPhone) => {
+    try {
+        const response = await axios.post(`${API_URL}/friends`, {
+            phone_user: userPhone,  // Modifié de user_phone à phone_user pour correspondre au backend
+            phone_friend: friendPhone
+        });
+        return response.data;
+    } catch (error) {
+        console.error("Erreur lors de l'ajout du contact:", error);
         throw error;
     }
 };

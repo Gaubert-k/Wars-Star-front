@@ -14,18 +14,25 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { translate, getCurrentLanguage, setLanguage, availableLanguages } from '../utils/i18nUtils';
+import { API_URL } from '../services/api';
+import { useTheme, DARK_MODE_KEY } from '../utils/ThemeContext';
 
-const API_URL = 'http://89.80.190.158:5000/api';
+// Définition de la constante utilisée pour l'authentification - identique à celle de App.js
 const AUTH_KEY = 'user_auth_data';
+const NOTIFICATIONS_KEY = 'notifications_enabled';
+const PRIVACY_SETTINGS_KEY = 'privacy_settings';
 
 const SettingsScreen = ({ navigation }) => {
+    const { theme, isDarkMode, toggleTheme } = useTheme();
     const [userInfo, setUserInfo] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [darkMode, setDarkMode] = useState(false);
     const [notifications, setNotifications] = useState(true);
     const [selectedLanguage, setSelectedLanguage] = useState('fr');
-
-    useEffect(() => {
+    const [privacySettings, setPrivacySettings] = useState({
+        lastSeen: true,
+        status: true,
+        readReceipts: true
+    });    useEffect(() => {
         const fetchUserData = async () => {
             try {
                 setLoading(true);
@@ -40,6 +47,18 @@ const SettingsScreen = ({ navigation }) => {
                 // Récupérer la langue sauvegardée
                 const savedLanguage = await getCurrentLanguage();
                 setSelectedLanguage(savedLanguage);
+
+                // Récupérer les préférences de notifications
+                const savedNotifications = await AsyncStorage.getItem(NOTIFICATIONS_KEY);
+                if (savedNotifications !== null) {
+                    setNotifications(JSON.parse(savedNotifications));
+                }
+
+                // Récupérer les paramètres de confidentialité
+                const savedPrivacySettings = await AsyncStorage.getItem(PRIVACY_SETTINGS_KEY);
+                if (savedPrivacySettings !== null) {
+                    setPrivacySettings(JSON.parse(savedPrivacySettings));
+                }
 
             } catch (error) {
                 console.error('Erreur lors du chargement des paramètres:', error);
@@ -59,14 +78,56 @@ const SettingsScreen = ({ navigation }) => {
         navigation.goBack();
     };
 
-    const toggleDarkMode = () => {
-        setDarkMode(previousState => !previousState);
-        // Ici on pourrait sauvegarder ce paramètre
+    const toggleDarkMode = async () => {
+        try {
+            const newValue = !darkMode;
+            setDarkMode(newValue);
+            await AsyncStorage.setItem(DARK_MODE_KEY, JSON.stringify(newValue));
+            
+            // Dans une vraie application, on utiliserait ici un contexte global pour 
+            // appliquer le thème à toute l'application
+        } catch (error) {
+            console.error('Erreur lors de la sauvegarde du mode sombre:', error);
+            Alert.alert(
+                translate('error', selectedLanguage),
+                translate('settings_save_error', selectedLanguage) || 'Impossible de sauvegarder vos paramètres'
+            );
+        }
     };
 
-    const toggleNotifications = () => {
-        setNotifications(previousState => !previousState);
-        // Ici on pourrait sauvegarder ce paramètre
+    const toggleNotifications = async () => {
+        try {
+            const newValue = !notifications;
+            setNotifications(newValue);
+            await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(newValue));
+            
+            // Dans une vraie application, on enregistrerait ou désenregistrerait 
+            // les notifications push ici
+        } catch (error) {
+            console.error('Erreur lors de la sauvegarde des notifications:', error);
+            Alert.alert(
+                translate('error', selectedLanguage),
+                translate('settings_save_error', selectedLanguage) || 'Impossible de sauvegarder vos paramètres'
+            );
+        }
+    };
+
+    const togglePrivacySetting = async (setting) => {
+        try {
+            const updatedSettings = {
+                ...privacySettings,
+                [setting]: !privacySettings[setting]
+            };
+            
+            setPrivacySettings(updatedSettings);
+            await AsyncStorage.setItem(PRIVACY_SETTINGS_KEY, JSON.stringify(updatedSettings));
+        } catch (error) {
+            console.error('Erreur lors de la sauvegarde des paramètres de confidentialité:', error);
+            Alert.alert(
+                translate('error', selectedLanguage),
+                translate('settings_save_error', selectedLanguage) || 'Impossible de sauvegarder vos paramètres'
+            );
+        }
     };
 
     const handleLanguageSelect = async (languageCode) => {
@@ -115,6 +176,56 @@ const SettingsScreen = ({ navigation }) => {
         );
     };
 
+    const handleDeleteAccount = async () => {
+        Alert.alert(
+            translate('delete_account', selectedLanguage) || 'Supprimer le compte',
+            translate('delete_account_confirmation', selectedLanguage) || 'Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.',
+            [
+                {
+                    text: translate('cancel_button', selectedLanguage) || 'Annuler',
+                    style: 'cancel'
+                },
+                {
+                    text: translate('delete_button', selectedLanguage) || 'Supprimer',
+                    onPress: async () => {
+                        try {
+                            setLoading(true);
+                            
+                            // Dans une vraie application, on appellerait l'API pour supprimer le compte
+                            // await axios.delete(`${API_URL}/users/id/${userInfo.id}`);
+                            
+                            // Simuler un appel API avec un délai
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            
+                            // Supprimer toutes les données locales
+                            await AsyncStorage.multiRemove([
+                                AUTH_KEY,
+                                DARK_MODE_KEY,
+                                NOTIFICATIONS_KEY,
+                                PRIVACY_SETTINGS_KEY
+                            ]);
+                            
+                            // Rediriger vers l'écran de connexion
+                            navigation.reset({
+                                index: 0,
+                                routes: [{ name: 'Login' }],
+                            });
+                        } catch (error) {
+                            console.error('Erreur lors de la suppression du compte:', error);
+                            Alert.alert(
+                                translate('error', selectedLanguage) || 'Erreur',
+                                translate('delete_account_error', selectedLanguage) || 'Impossible de supprimer votre compte'
+                            );
+                        } finally {
+                            setLoading(false);
+                        }
+                    },
+                    style: 'destructive'
+                }
+            ]
+        );
+    };
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -127,21 +238,20 @@ const SettingsScreen = ({ navigation }) => {
     }
 
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
+        <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+            <View style={[styles.header, { backgroundColor: theme.headerBackgroundColor, borderBottomColor: theme.borderColor }]}>
                 <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#128C7E" />
+                    <Ionicons name="arrow-back" size={24} color={theme.primaryColor} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>
+                <Text style={[styles.headerTitle, { color: theme.primaryColor }]}>
                     {translate('settings', selectedLanguage)}
                 </Text>
                 <View style={styles.placeholder} />
             </View>
 
-            <ScrollView style={styles.content}>
-                {/* Section profil utilisateur */}
+            <ScrollView style={[styles.content, { backgroundColor: theme.backgroundColor }]}>                {/* Section profil utilisateur */}
                 <TouchableOpacity
-                    style={styles.profileSection}
+                    style={[styles.profileSection, { backgroundColor: theme.backgroundColor, borderBottomColor: theme.borderColor }]}
                     onPress={() => navigation.navigate('Profile', { phone: userInfo?.phone, userInfo })}
                 >
                     <View style={styles.profileImageContainer}>
@@ -156,47 +266,44 @@ const SettingsScreen = ({ navigation }) => {
                         )}
                     </View>
                     <View style={styles.profileInfo}>
-                        <Text style={styles.profileName}>
+                        <Text style={[styles.profileName, { color: theme.textColor }]}>
                             {userInfo ? `${userInfo.first_name || ''} ${userInfo.last_name || ''}` : translate('user', selectedLanguage) || 'Utilisateur'}
                         </Text>
-                        <Text style={styles.profilePhone}>
+                        <Text style={[styles.profilePhone, { color: theme.placeholderTextColor }]}>
                             {userInfo ? userInfo.phone : ''}
                         </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={24} color="#95a5a6" />
+                    <Ionicons name="chevron-forward" size={24} color={theme.inactiveColor} />
                 </TouchableOpacity>
 
-                {/* Section pour le mode sombre */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>
+                {/* Section pour le mode sombre */}                <View style={[styles.section, { backgroundColor: theme.backgroundColor, borderColor: theme.borderColor }]}>
+                    <Text style={[styles.sectionTitle, { color: theme.placeholderTextColor }]}>
                         {translate('appearance', selectedLanguage)}
                     </Text>
-                    <View style={styles.settingItem}>
+                    <View style={[styles.settingItem, { borderBottomColor: theme.borderColor }]}>
                         <View style={styles.settingInfo}>
-                            <Ionicons name="moon-outline" size={24} color="#128C7E" style={styles.settingIcon} />
-                            <Text style={styles.settingText}>
+                            <Ionicons name="moon-outline" size={24} color={theme.primaryColor} style={styles.settingIcon} />
+                            <Text style={[styles.settingText, { color: theme.textColor }]}>
                                 {translate('dark_mode', selectedLanguage)}
                             </Text>
                         </View>
                         <Switch
                             trackColor={{ false: "#95a5a6", true: "#25D366" }}
-                            thumbColor={darkMode ? "#FFFFFF" : "#FFFFFF"}
+                            thumbColor={isDarkMode ? "#FFFFFF" : "#FFFFFF"}
                             ios_backgroundColor="#95a5a6"
-                            onValueChange={toggleDarkMode}
-                            value={darkMode}
+                            onValueChange={toggleTheme}
+                            value={isDarkMode}
                         />
                     </View>
-                </View>
-
-                {/* Section pour les notifications */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>
+                </View>                {/* Section pour les notifications */}
+                <View style={[styles.section, { backgroundColor: theme.backgroundColor, borderColor: theme.borderColor }]}>
+                    <Text style={[styles.sectionTitle, { color: theme.placeholderTextColor }]}>
                         {translate('notifications', selectedLanguage)}
                     </Text>
-                    <View style={styles.settingItem}>
+                    <View style={[styles.settingItem, { borderBottomColor: theme.borderColor }]}>
                         <View style={styles.settingInfo}>
-                            <Ionicons name="notifications-outline" size={24} color="#128C7E" style={styles.settingIcon} />
-                            <Text style={styles.settingText}>
+                            <Ionicons name="notifications-outline" size={24} color={theme.primaryColor} style={styles.settingIcon} />
+                            <Text style={[styles.settingText, { color: theme.textColor }]}>
                                 {translate('enable_notifications', selectedLanguage)}
                             </Text>
                         </View>
@@ -208,51 +315,110 @@ const SettingsScreen = ({ navigation }) => {
                             value={notifications}
                         />
                     </View>
-                </View>
-
-                {/* Section pour la langue */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>
+                </View>                {/* Section pour la confidentialité */}
+                <View style={[styles.section, { backgroundColor: theme.backgroundColor, borderColor: theme.borderColor }]}>
+                    <Text style={[styles.sectionTitle, { color: theme.placeholderTextColor }]}>
+                        {translate('privacy', selectedLanguage) || 'Confidentialité'}
+                    </Text>
+                    
+                    <View style={[styles.settingItem, { borderBottomColor: theme.borderColor }]}>
+                        <View style={styles.settingInfo}>
+                            <Ionicons name="eye-outline" size={24} color={theme.primaryColor} style={styles.settingIcon} />
+                            <Text style={[styles.settingText, { color: theme.textColor }]}>
+                                {translate('last_seen', selectedLanguage) || 'Dernière connexion'}
+                            </Text>
+                        </View>
+                        <Switch
+                            trackColor={{ false: "#95a5a6", true: "#25D366" }}
+                            thumbColor={privacySettings.lastSeen ? "#FFFFFF" : "#FFFFFF"}
+                            ios_backgroundColor="#95a5a6"
+                            onValueChange={() => togglePrivacySetting('lastSeen')}
+                            value={privacySettings.lastSeen}
+                        />
+                    </View>
+                      <View style={[styles.settingItem, { borderBottomColor: theme.borderColor }]}>
+                        <View style={styles.settingInfo}>
+                            <Ionicons name="information-circle-outline" size={24} color={theme.primaryColor} style={styles.settingIcon} />
+                            <Text style={[styles.settingText, { color: theme.textColor }]}>
+                                {translate('status', selectedLanguage) || 'Statut'}
+                            </Text>
+                        </View>
+                        <Switch
+                            trackColor={{ false: "#95a5a6", true: "#25D366" }}
+                            thumbColor={privacySettings.status ? "#FFFFFF" : "#FFFFFF"}
+                            ios_backgroundColor="#95a5a6"
+                            onValueChange={() => togglePrivacySetting('status')}
+                            value={privacySettings.status}
+                        />
+                    </View>
+                    
+                    <View style={[styles.settingItem, { borderBottomColor: theme.borderColor }]}>
+                        <View style={styles.settingInfo}>
+                            <Ionicons name="checkmark-done-outline" size={24} color={theme.primaryColor} style={styles.settingIcon} />
+                            <Text style={[styles.settingText, { color: theme.textColor }]}>
+                                {translate('read_receipts', selectedLanguage) || 'Confirmations de lecture'}
+                            </Text>
+                        </View>
+                        <Switch
+                            trackColor={{ false: "#95a5a6", true: "#25D366" }}
+                            thumbColor={privacySettings.readReceipts ? "#FFFFFF" : "#FFFFFF"}
+                            ios_backgroundColor="#95a5a6"
+                            onValueChange={() => togglePrivacySetting('readReceipts')}
+                            value={privacySettings.readReceipts}
+                        />
+                    </View>
+                </View>                {/* Section pour la langue */}
+                <View style={[styles.section, { backgroundColor: theme.backgroundColor, borderColor: theme.borderColor }]}>
+                    <Text style={[styles.sectionTitle, { color: theme.placeholderTextColor }]}>
                         {translate('language', selectedLanguage)}
                     </Text>
                     {availableLanguages.map((language) => (
                         <TouchableOpacity
                             key={language.code}
-                            style={styles.settingItem}
+                            style={[styles.settingItem, { borderBottomColor: theme.borderColor }]}
                             onPress={() => handleLanguageSelect(language.code)}
                         >
                             <View style={styles.settingInfo}>
                                 <Ionicons
                                     name="globe-outline"
                                     size={24}
-                                    color="#128C7E"
+                                    color={theme.primaryColor}
                                     style={styles.settingIcon}
                                 />
-                                <Text style={styles.settingText}>{language.name}</Text>
+                                <Text style={[styles.settingText, { color: theme.textColor }]}>{language.name}</Text>
                             </View>
                             {selectedLanguage === language.code && (
-                                <Ionicons name="checkmark" size={24} color="#128C7E" />
+                                <Ionicons name="checkmark" size={24} color={theme.primaryColor} />
                             )}
                         </TouchableOpacity>
                     ))}
-                </View>
-
-                {/* Section pour la déconnexion */}
+                </View>                {/* Section pour la déconnexion */}
                 <TouchableOpacity
-                    style={[styles.section, styles.logoutSection]}
+                    style={[styles.section, styles.logoutSection, { backgroundColor: theme.backgroundColor, borderColor: theme.borderColor }]}
                     onPress={handleLogout}
                 >
                     <View style={styles.settingInfo}>
-                        <Ionicons name="log-out-outline" size={24} color="#e74c3c" style={styles.settingIcon} />
+                        <Ionicons name="log-out-outline" size={24} color={theme.dangerColor} style={styles.settingIcon} />
                         <Text style={[styles.settingText, styles.logoutText]}>
                             {translate('logout', selectedLanguage)}
                         </Text>
                     </View>
                 </TouchableOpacity>
 
-                {/* Information sur la version */}
-                <View style={styles.versionContainer}>
-                    <Text style={styles.versionText}>
+                {/* Section pour supprimer le compte */}
+                <TouchableOpacity
+                    style={[styles.section, styles.dangerSection, { backgroundColor: theme.backgroundColor, borderColor: theme.borderColor }]}
+                    onPress={handleDeleteAccount}
+                >
+                    <View style={styles.settingInfo}>
+                        <Ionicons name="trash-outline" size={24} color={theme.dangerColor} style={styles.settingIcon} />
+                        <Text style={[styles.settingText, styles.dangerText]}>
+                            {translate('delete_account', selectedLanguage) || 'Supprimer le compte'}
+                        </Text>
+                    </View>
+                </TouchableOpacity>                {/* Information sur la version */}
+                <View style={[styles.versionContainer, { backgroundColor: theme.backgroundColor }]}>
+                    <Text style={[styles.versionText, { color: theme.inactiveColor }]}>
                         {translate('version', selectedLanguage, { version: '1.0.0' })}
                     </Text>
                 </View>
@@ -379,9 +545,15 @@ const styles = StyleSheet.create({
         color: '#2c3e50',
     },
     logoutSection: {
-        marginTop: 40,
+        marginTop: 20,
     },
     logoutText: {
+        color: '#e74c3c',
+    },
+    dangerSection: {
+        marginTop: 20,
+    },
+    dangerText: {
         color: '#e74c3c',
     },
     versionContainer: {
@@ -394,4 +566,5 @@ const styles = StyleSheet.create({
     },
 });
 
+// Assurez-vous que ce composant est bien exporté correctement
 export default SettingsScreen;

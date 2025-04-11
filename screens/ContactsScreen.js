@@ -14,11 +14,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '../utils/ThemeContext';
 
 const API_URL = 'http://89.80.190.158:5000/api';
 const AUTH_KEY = 'user_auth_data';
 
 const ContactsScreen = ({ navigation }) => {
+    const { theme } = useTheme();
     const [userInfo, setUserInfo] = useState(null);
     const [loading, setLoading] = useState(true);
     const [friends, setFriends] = useState([]);
@@ -140,9 +142,7 @@ const ContactsScreen = ({ navigation }) => {
     const handleSettingsPress = () => {
         // Navigation vers l'écran des paramètres
         navigation.navigate('Settings');
-    };
-
-    const handleAddFriend = async () => {
+    };    const handleAddFriend = async () => {
         if (!newFriendPhone.trim()) {
             Alert.alert("Erreur", "Veuillez saisir un numéro de téléphone");
             return;
@@ -151,10 +151,10 @@ const ContactsScreen = ({ navigation }) => {
         try {
             setAddingFriend(true);
 
+            // Utiliser le format attendu par le backend (phone_user et phone_friend uniquement)
             const friendData = {
                 phone_user: userPhone,
-                phone_friend: newFriendPhone,
-                messages: []
+                phone_friend: newFriendPhone.trim()
             };
 
             await axios.post(`${API_URL}/friends`, friendData);
@@ -211,34 +211,118 @@ const ContactsScreen = ({ navigation }) => {
                 </View>
             </TouchableOpacity>
         );
-    };
+    };    // Styles dynamiques basés sur le thème actuel
+    const dynamicStyles = StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: theme.backgroundColor,
+        },
+        header: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: 16,
+            backgroundColor: theme.headerBackgroundColor,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.borderColor,
+        },
+        headerTitle: {
+            fontSize: 20,
+            fontWeight: 'bold',
+            color: theme.textColor,
+        },
+        userImage: {
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+        },
+        userImagePlaceholder: {
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: theme.primaryColor,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        userImageText: {
+            color: '#FFFFFF',
+            fontSize: 18,
+            fontWeight: 'bold',
+        },
+        searchContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: theme.name === 'dark' ? '#2a2a2a' : '#F3F3F3',
+            borderRadius: 20,
+            margin: 16,
+            paddingHorizontal: 12,
+        },
+        searchIcon: {
+            marginRight: 8,
+            color: theme.placeholderTextColor,
+        },
+        searchInput: {
+            flex: 1,
+            height: 40,
+            color: theme.textColor,
+        },
+        listContainer: {
+            paddingHorizontal: 16,
+        },
+        contactItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingVertical: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.borderColor,
+        },
+        friendName: {
+            fontSize: 17,
+            fontWeight: '500',
+            color: theme.textColor,
+        },
+        friendPhone: {
+            fontSize: 14,
+            color: theme.placeholderTextColor,
+            marginTop: 2,
+        },
+        emptyText: {
+            fontSize: 18,
+            fontWeight: 'bold',
+            color: theme.textColor,
+            marginTop: 16,
+        },
+        emptySubText: {
+            fontSize: 14,
+            color: theme.placeholderTextColor,
+            marginTop: 8,
+        },
+    });
 
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
+        <View style={dynamicStyles.container}>
+            <View style={dynamicStyles.header}>
                 <TouchableOpacity onPress={handleLogoPress}>
                     {userInfo && userInfo.logo ? (
-                        <Image source={{ uri: userInfo.logo }} style={styles.userImage} />
+                        <Image source={{ uri: userInfo.logo }} style={dynamicStyles.userImage} />
                     ) : (
-                        <View style={styles.userImagePlaceholder}>
-                            <Text style={styles.userImageText}>
+                        <View style={dynamicStyles.userImagePlaceholder}>
+                            <Text style={dynamicStyles.userImageText}>
                                 {userInfo && userInfo.first_name ? userInfo.first_name.charAt(0).toUpperCase() : 'U'}
                             </Text>
                         </View>
                     )}
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Wars Star</Text>
+                <Text style={dynamicStyles.headerTitle}>Wars Star</Text>
                 <TouchableOpacity onPress={handleSettingsPress}>
-                    <Ionicons name="settings-outline" size={24} color="#128C7E" />
+                    <Ionicons name="settings-outline" size={24} color={theme.primaryColor} />
                 </TouchableOpacity>
-            </View>
-
-            <View style={styles.searchContainer}>
-                <Ionicons name="search" size={20} color="#7f8c8d" style={styles.searchIcon} />
+            </View>            <View style={dynamicStyles.searchContainer}>
+                <Ionicons name="search" size={20} color={theme.placeholderTextColor} style={styles.searchIcon} />
                 <TextInput
-                    style={styles.searchInput}
+                    style={dynamicStyles.searchInput}
                     placeholder="Rechercher..."
-                    placeholderTextColor="#7f8c8d"
+                    placeholderTextColor={theme.placeholderTextColor}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                 />
@@ -246,28 +330,41 @@ const ContactsScreen = ({ navigation }) => {
 
             {loading ? (
                 <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#128C7E" />
-                    <Text style={styles.loadingText}>Chargement des contacts...</Text>
+                    <ActivityIndicator size="large" color={theme.primaryColor} />
+                    <Text style={{marginTop: 12, fontSize: 16, color: theme.placeholderTextColor}}>Chargement des contacts...</Text>
                 </View>
             ) : (
                 <FlatList
                     data={filteredFriends}
                     renderItem={renderFriendItem}
                     keyExtractor={(item) => item._id.toString()}
-                    contentContainerStyle={styles.listContainer}
+                    contentContainerStyle={dynamicStyles.listContainer}
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
-                            <Ionicons name="people-outline" size={60} color="#128C7E" />
-                            <Text style={styles.emptyText}>Aucun ami à afficher</Text>
-                            <Text style={styles.emptySubText}>Appuyez sur le + pour ajouter des amis</Text>
+                            <Ionicons name="people-outline" size={60} color={theme.primaryColor} />
+                            <Text style={dynamicStyles.emptyText}>Aucun ami à afficher</Text>
+                            <Text style={dynamicStyles.emptySubText}>Appuyez sur le + pour ajouter des amis</Text>
                         </View>
                     }
                 />
-            )}
-
-            {/* FAB pour ajouter un ami */}
+            )}            {/* FAB pour ajouter un ami */}
             <TouchableOpacity
-                style={styles.addButton}
+                style={{
+                    position: 'absolute',
+                    bottom: 20,
+                    left: 20,
+                    width: 60,
+                    height: 60,
+                    borderRadius: 30,
+                    backgroundColor: theme.primaryColor,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    elevation: 5,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 3,
+                }}
                 onPress={() => setModalVisible(true)}
             >
                 <Ionicons name="add" size={30} color="#FFFFFF" />
@@ -281,13 +378,43 @@ const ContactsScreen = ({ navigation }) => {
                 onRequestClose={() => setModalVisible(false)}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Ajouter un ami</Text>
+                    <View style={{
+                        width: '80%',
+                        backgroundColor: theme.backgroundColor,
+                        borderRadius: 10,
+                        padding: 20,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 3.84,
+                        elevation: 5,
+                    }}>
+                        <Text style={{
+                            fontSize: 20,
+                            fontWeight: 'bold',
+                            color: theme.primaryColor,
+                            marginBottom: 20,
+                            textAlign: 'center',
+                        }}>Ajouter un ami</Text>
 
-                        <Text style={styles.modalLabel}>Numéro de téléphone</Text>
+                        <Text style={{
+                            fontSize: 16,
+                            color: theme.textColor,
+                            marginBottom: 5,
+                        }}>Numéro de téléphone</Text>
                         <TextInput
-                            style={styles.modalInput}
+                            style={{
+                                borderWidth: 1,
+                                borderColor: theme.borderColor,
+                                borderRadius: 5,
+                                padding: 10,
+                                fontSize: 16,
+                                marginBottom: 20,
+                                color: theme.textColor,
+                                backgroundColor: theme.name === 'dark' ? '#2a2a2a' : '#FFFFFF',
+                            }}
                             placeholder="Ex: 0601020304"
+                            placeholderTextColor={theme.placeholderTextColor}
                             value={newFriendPhone}
                             onChangeText={setNewFriendPhone}
                             keyboardType="phone-pad"
