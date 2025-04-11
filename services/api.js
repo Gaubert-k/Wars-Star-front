@@ -2,9 +2,11 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = 'http://89.80.190.158:5000/api';
+const AUTH_KEY = 'user_auth_data';
 
 export const checkAndHandleAuth = async (navigation) => {
     try {
+
         const userData = await AsyncStorage.getItem(AUTH_KEY);
 
         if (!userData) {
@@ -57,7 +59,7 @@ export const getMessages = async (userPhone) => {
     } catch (error) {
         // Si l'erreur est 404, renvoyer un tableau vide au lieu de lancer une erreur
         if (error.response && error.response.status === 404) {
-            console.log("Aucun message trouvé pour l'utilisateur:", userPhone);
+            console.log("Aucun message trouvé pour l'utilisateur:", error.response);
             return []; // Retourner un tableau vide au lieu de lancer une erreur
         }
 
@@ -70,11 +72,14 @@ export const getMessages = async (userPhone) => {
 export const sendMessage = async (messageData) => {
     try {
         // Récupérer le numéro de téléphone du sender depuis AsyncStorage
-        const sender = await AsyncStorage.getItem('userPhone');
+        const userData = await AsyncStorage.getItem(AUTH_KEY);
 
-        if (!sender) {
+        if (!userData) {
             throw new Error('Utilisateur non authentifié');
         }
+
+        const parsedUserData = JSON.parse(userData);
+        const phoneNumber = parsedUserData.phone;
 
         // Vérification des champs obligatoires
         if (!messageData.message || !messageData.receiver) {
@@ -84,7 +89,7 @@ export const sendMessage = async (messageData) => {
         // Construction de l'objet avec le sender récupéré automatiquement
         const requiredData = {
             message: messageData.message,
-            sender: sender,
+            sender: phoneNumber,  // CORRECTION ICI: utiliser phoneNumber au lieu de sender
             receiver: messageData.receiver,
         };
 
@@ -96,6 +101,7 @@ export const sendMessage = async (messageData) => {
         throw error;
     }
 }
+
 
 export const getFriends = async (userPhone) => {
     try {

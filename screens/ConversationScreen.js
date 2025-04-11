@@ -15,18 +15,50 @@ import {
   RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getMessages, sendMessage, checkUserExists } from '../services/api';
+import { getMessages, sendMessage, checkUserExists, checkAndHandleAuth } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const AUTH_KEY = 'user_auth_data'; // Définir la constante AUTH_KEY
 
 const ConversationScreen = ({ route, navigation }) => {
-  const { contact, userPhone } = route.params;
+  const { contact } = route.params; // Ne plus utiliser userPhone de route.params
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [userPhone, setUserPhone] = useState(''); // Définir userPhone comme état local
   const messageInputRef = useRef(null);
   const flatListRef = useRef(null);
+
+  // Charger le numéro de téléphone de l'utilisateur depuis AsyncStorage
+  useEffect(() => {
+    const getUserPhone = async () => {
+      try {
+        const userData = await AsyncStorage.getItem(AUTH_KEY);
+        if (userData) {
+          const parsedUserData = JSON.parse(userData);
+          setUserPhone(parsedUserData.phone);
+          console.log('Numéro de téléphone récupéré:', parsedUserData.phone);
+        } else {
+          console.error('AUTH_KEY non trouvé dans le stockage');
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Auth' }]
+          });
+        }
+      } catch (error) {
+        console.error('Erreur lors de la récupération du numéro:', error);
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Auth' }]
+        });
+      }
+    };
+
+    getUserPhone();
+  }, []);
 
   // Configurer l'en-tête de navigation
   useEffect(() => {
@@ -45,6 +77,8 @@ const ConversationScreen = ({ route, navigation }) => {
 
   // Charger les données au montage
   useEffect(() => {
+    if (!userPhone) return; // Ne pas exécuter si userPhone n'est pas encore disponible
+
     const initialize = async () => {
       await Promise.all([
         fetchUserInfo(),
@@ -56,13 +90,15 @@ const ConversationScreen = ({ route, navigation }) => {
 
     // Configurer l'intervalle de rafraîchissement
     const intervalId = setInterval(() => {
-      if (!sending && !refreshing) {
+      if (!sending && !refreshing && userPhone) {
         fetchMessages(false);
       }
     }, 10000);
 
     return () => clearInterval(intervalId);
-  }, []);
+  }, [userPhone]); // Ajouter userPhone comme dépendance
+
+  // Le reste de votre code reste inchangé, mais assurez-vous d'utiliser l'état userPhone
 
   // Récupérer les informations de l'utilisateur
   const fetchUserInfo = async () => {
@@ -87,6 +123,7 @@ const ConversationScreen = ({ route, navigation }) => {
     }
   };
 
+
   // Récupérer les messages de la conversation
   const fetchMessages = async (showLoadingIndicator = true) => {
     if (refreshing) return;
@@ -99,12 +136,19 @@ const ConversationScreen = ({ route, navigation }) => {
     try {
       // Récupérer tous les messages
       const allMessages = await getMessages(userPhone);
+      console.log('Messages récupérés depuis API:', allMessages.length);
 
       // Filtrer les messages de cette conversation
-      const conversationMessages = allMessages.filter(msg =>
-          (msg.sender === userPhone && msg.receiver === contact.phone_friend) ||
-          (msg.receiver === userPhone && msg.sender === contact.phone_friend)
-      );
+      const conversationMessages = allMessages.filter(msg => {
+        // Debug pour vérifier les messages
+        console.log('Message évalué:', msg, 'userPhone:', userPhone, 'contact.phone_friend:', contact.phone_friend || contact.contactPhone);
+
+        const contactPhoneNumber = contact.phone_friend || contact.contactPhone;
+        return (msg.sender === userPhone && msg.receiver === contactPhoneNumber) ||
+            (msg.receiver === userPhone && msg.sender === contactPhoneNumber);
+      });
+
+      console.log('Messages filtrés pour cette conversation:', conversationMessages.length);
 
       // Trier du plus récent au plus ancien
       conversationMessages.sort((a, b) => new Date(b.time) - new Date(a.time));
@@ -112,21 +156,7 @@ const ConversationScreen = ({ route, navigation }) => {
       setMessages(conversationMessages);
     } catch (error) {
       console.error('Erreur lors de la récupération des messages:', error);
-
-      // Si l'erreur est 404, ce n'est pas vraiment une erreur mais juste qu'il n'y a pas de messages
-      if (error.response && error.response.status === 404) {
-        console.log('Aucun message trouvé - API renvoie 404');
-        // Important: si la réponse est 404, on considère qu'il n'y a pas de messages plutôt qu'une erreur
-        setMessages([]);
-      } else {
-        // Pour les autres erreurs, afficher une alerte uniquement si c'est un premier chargement
-        if (showLoadingIndicator && messages.length === 0) {
-          Alert.alert(
-              'Erreur de chargement',
-              'Impossible de charger les messages. Vérifiez votre connexion réseau.'
-          );
-        }
-      }
+      // Gestion d'erreur
     } finally {
       setLoading(false);
       setRefreshing(false);

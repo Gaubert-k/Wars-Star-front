@@ -30,45 +30,42 @@ const MessagesScreen = ({ navigation }) => {
   // Fonction pour récupérer le numéro de téléphone de l'utilisateur
   const getUserPhone = async () => {
     try {
-      const userData = await AsyncStorage.getItem(AUTH_KEY);
-      if (userData) {
-        const parsedUserData = JSON.parse(userData);
-        setUserPhone(parsedUserData.phone);
-        return parsedUserData.phone;
+      const phone = await AsyncStorage.getItem('user_auth_data');
+      if (phone) {
+        setUserPhone(phone);
+        return phone;
       }
-
-      // Si pas de données, rediriger vers l'authentification
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Auth' }]
-      });
       return null;
     } catch (error) {
       console.error('Erreur lors de la récupération du numéro:', error);
+      Alert.alert('Erreur', 'Impossible de récupérer votre numéro de téléphone');
       return null;
     }
   };
 
-
   // Chargement initial
   useEffect(() => {
     const loadInitialData = async () => {
-      // Vérifier l'authentification
-      const userData = await checkAndHandleAuth(navigation);
-      if (!userData) {
-        return; // La redirection est gérée dans checkAndHandleAuth
+      const phone = await getUserPhone();
+      if (phone) {
+        fetchMessages(phone);
+      } else {
+        setLoading(false);
       }
-
-      // Si on arrive ici, c'est que l'utilisateur est authentifié
-      setUserPhone(userData.phone);
-      fetchMessages(userData.phone);
     };
 
     loadInitialData();
 
-    // Le reste de votre code...
-  }, [navigation]);
+    // Rafraîchir lors du focus de l'écran
+    const unsubscribe = navigation.addListener('focus', async () => {
+      const phone = await getUserPhone();
+      if (phone) {
+        fetchMessages(phone);
+      }
+    });
 
+    return unsubscribe;
+  }, [navigation]);
 
   // Fonction pour organiser les messages par contact
   const organizeConversationsByContact = (messages, userPhone) => {
