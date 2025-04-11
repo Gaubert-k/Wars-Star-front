@@ -14,7 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkUserExists, createUser } from "../services/api";
 
-const API_URL = 'http://89.80.190.158:5000/api';
+const API_URL = 'http://192.168.230.82:5000/api';
 const AUTH_KEY = 'user_auth_data';
 
 const AuthScreen = ({ navigation }) => {
@@ -73,10 +73,8 @@ const AuthScreen = ({ navigation }) => {
                         });
 
                         // Naviguer vers l'app principale
-                        navigation.reset({
-                            index: 0,
-                            routes: [{ name: 'MainApp' }],
-                        });
+                        navigation.replace('MainApp');
+
                     }
                 } catch (error) {
                     console.error('Erreur lors de la vérification/création de l\'utilisateur:', error);

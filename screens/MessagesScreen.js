@@ -30,8 +30,10 @@ const MessagesScreen = ({ navigation }) => {
   // Fonction pour récupérer le numéro de téléphone de l'utilisateur
   const getUserPhone = async () => {
     try {
-      const phone = await AsyncStorage.getItem('user_auth_data');
-      if (phone) {
+      const userData = await AsyncStorage.getItem('user_auth_data');
+      if (userData) {
+        const parsedUserData = JSON.parse(userData);
+        const phone = parsedUserData.phone || parsedUserData._id;
         setUserPhone(phone);
         return phone;
       }

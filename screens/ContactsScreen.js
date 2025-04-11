@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://89.80.190.158:5000/api';
+const API_URL = 'http://192.168.230.82:5000/api';
 const AUTH_KEY = 'user_auth_data';
 
 const ContactsScreen = ({ navigation }) => {

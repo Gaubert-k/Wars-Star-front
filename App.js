@@ -8,6 +8,17 @@ export default function App() {
     const [isLoading, setIsLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+    const checkAuthStatus = async () => {
+        try {
+            const userData = await AsyncStorage.getItem(AUTH_KEY);
+            const isAuthenticated = await AsyncStorage.getItem('isAuthenticated');
+            return userData !== null && isAuthenticated === 'true';
+        } catch (error) {
+            console.error('Erreur lors de la vérification de l\'authentification:', error);
+            return false;
+        }
+    };
+
     useEffect(() => {
         const initializeApp = async () => {
             const authStatus = await checkAuthStatus();

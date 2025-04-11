@@ -15,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { translate, getCurrentLanguage, setLanguage, availableLanguages } from '../utils/i18nUtils';
 
-const API_URL = 'http://89.80.190.158:5000/api';
+const API_URL = 'http://192.168.230.82:5000/api';
 const AUTH_KEY = 'user_auth_data';
 
 const SettingsScreen = ({ navigation }) => {
@@ -96,17 +96,22 @@ const SettingsScreen = ({ navigation }) => {
                     text: translate('logout_button', selectedLanguage),
                     onPress: async () => {
                         try {
+                            // Supprimer les données d'authentification
                             await AsyncStorage.removeItem(AUTH_KEY);
-                            // Rediriger vers l'écran de connexion
+
+                            // Marquer l'utilisateur comme non authentifié
+                            await AsyncStorage.setItem('isAuthenticated', 'false');
+
+                            // Navigation vers l'écran Auth (pas Login)
                             navigation.reset({
                                 index: 0,
-                                routes: [{ name: 'Login' }],
+                                routes: [{ name: 'Auth' }],
                             });
                         } catch (error) {
                             console.error('Erreur lors de la déconnexion:', error);
                             Alert.alert(
                                 translate('error', selectedLanguage),
-                                translate('logout_error', selectedLanguage) || 'Impossible de vous déconnecter'
+                                translate('logout_error', selectedLanguage) || 'Impossible de se déconnecter'
                             );
                         }
                     }

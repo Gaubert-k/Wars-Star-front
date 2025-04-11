@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 
-const API_URL = 'http://89.80.190.158:5000/api';
+const API_URL = 'http://192.168.230.82:5000/api';
 
 const ContactDetailScreen = ({ route, navigation }) => {
     const { contact, userPhone } = route.params;

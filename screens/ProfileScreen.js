@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 
-const API_URL = 'http://89.80.190.158:5000/api';
+const API_URL = 'http://192.168.230.82:5000/api';
 
 const ProfileScreen = ({ route, navigation }) => {
     const { phone, userInfo } = route.params;
