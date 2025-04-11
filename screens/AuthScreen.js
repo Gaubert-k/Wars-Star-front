@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {checkUserExists, createUser} from "../services/api";
+import { checkUserExists, createUser } from "../services/api";
 
 const API_URL = 'http://89.80.190.158:5000/api';
 const AUTH_KEY = 'user_auth_data';
@@ -22,6 +22,9 @@ const AuthScreen = ({ navigation }) => {
     const [phoneNumber, setPhoneNumber] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+    const [showNewUserForm, setShowNewUserForm] = useState(false);
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
 
     // Vérification de l'authentification au chargement
     useEffect(() => {
@@ -105,42 +108,64 @@ const AuthScreen = ({ navigation }) => {
             const result = await checkUserExists(phoneNumber);
 
             if (result.exists) {
-                // Utilisateur existe, sauvegarder ses informations
+                // Utilisateur existe, sauvegarder les données et continuer
                 await saveAuthData({
                     phone: phoneNumber,
                     ...result.user
                 });
-            } else {
-                // Utilisateur n'existe pas, le créer
-                const newUser = {
-                    phone: phoneNumber,
-                    first_name: 'Utilisateur',
-                    last_name: 'Nouveau',
-                    logo: `https://ui-avatars.com/api/?name=Utilisateur+Nouveau&background=random`
-                };
 
-                const createdUser = await createUser(newUser);
-
-                // Sauvegarder les informations du nouvel utilisateur
-                await saveAuthData({
-                    phone: phoneNumber,
-                    ...createdUser
+                setIsLoading(false);
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'MainApp' }],
                 });
+            } else {
+                // Nouvel utilisateur, demander des informations supplémentaires
+                setIsLoading(false);
+                setShowNewUserForm(true);
             }
+        } catch (error) {
+            console.error('Erreur lors de la connexion:', error);
+            setIsLoading(false);
+            Alert.alert('Erreur', 'Impossible de se connecter. Veuillez réessayer.');
+        }
+    };
 
-            // Naviguer vers l'application principale
+    const handleCreateUser = async () => {
+        if (!firstName || !lastName) {
+            Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+            return;
+        }
+
+        setIsLoading(true);
+
+        try {
+            const newUser = {
+                phone: phoneNumber,
+                first_name: firstName,
+                last_name: lastName,
+                logo: `https://ui-avatars.com/api/?name=${firstName}+${lastName}&background=random`
+            };
+
+            const createdUser = await createUser(newUser);
+
+            // Sauvegarder les données d'authentification
+            await saveAuthData({
+                phone: phoneNumber,
+                ...createdUser
+            });
+
+            setIsLoading(false);
             navigation.reset({
                 index: 0,
                 routes: [{ name: 'MainApp' }],
             });
         } catch (error) {
-            console.error('Erreur lors de la connexion:', error);
-            Alert.alert('Erreur', 'Impossible de se connecter. Serveur indisponible ou problème réseau.');
-        } finally {
+            console.error('Erreur lors de la création du compte:', error);
             setIsLoading(false);
+            Alert.alert('Erreur', 'Impossible de créer le compte. Veuillez réessayer.');
         }
     };
-
 
     // Fonction pour sauvegarder les données d'authentification
     const saveAuthData = async (userData) => {
@@ -151,52 +176,97 @@ const AuthScreen = ({ navigation }) => {
         }
     };
 
-    // Afficher un indicateur de chargement pendant la vérification de l'authentification
     if (isCheckingAuth) {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#128C7E" />
-                <Text style={styles.loadingText}>Chargement...</Text>
+            <View style={styles.container}>
+                <ActivityIndicator size="large" color="#007BFF" />
+                <Text style={styles.loadingText}>Vérification de la connexion...</Text>
             </View>
         );
     }
 
     return (
         <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-            <View style={styles.logoContainer}>
+            <View style={styles.content}>
                 <Image
-                    source={{ uri: 'https://placekitten.com/200/200' }} // Image placeholder
+                    source={require('../assets/favicon.png')}
                     style={styles.logo}
                 />
-                <Text style={styles.appName}>Wars-star</Text>
-                <Text style={styles.tagline}>Connectez-vous simplement</Text>
-            </View>
 
-            <View style={styles.formContainer}>
-                <Text style={styles.inputLabel}>Numéro de téléphone</Text>
-                <TextInput
-                    style={styles.input}
-                    value={phoneNumber}
-                    onChangeText={setPhoneNumber}
-                    placeholder="Entrez votre numéro de téléphone"
-                    keyboardType="phone-pad"
-                    maxLength={15}
-                />
+                <Text style={styles.title}>
+                    {showNewUserForm ? 'Créer un compte' : 'Connexion'}
+                </Text>
 
-                <TouchableOpacity
-                    style={styles.loginButton}
-                    onPress={handleLogin}
-                    disabled={isLoading}
-                >
-                    {isLoading ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                        <Text style={styles.loginButtonText}>Se connecter</Text>
-                    )}
-                </TouchableOpacity>
+                {showNewUserForm ? (
+                    <View style={styles.inputContainer}>
+                        <Text style={styles.phoneLabel}>Votre numéro: {phoneNumber}</Text>
+
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Prénom"
+                            value={firstName}
+                            onChangeText={setFirstName}
+                            autoCapitalize="words"
+                        />
+
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Nom"
+                            value={lastName}
+                            onChangeText={setLastName}
+                            autoCapitalize="words"
+                        />
+
+                        <TouchableOpacity
+                            style={styles.button}
+                            onPress={handleCreateUser}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.buttonText}>Créer mon compte</Text>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.secondaryButton}
+                            onPress={() => setShowNewUserForm(false)}
+                            disabled={isLoading}
+                        >
+                            <Text style={styles.secondaryButtonText}>Retour</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <View style={styles.inputContainer}>
+                        <Text style={styles.subtitle}>
+                            Entrez votre numéro de téléphone pour vous connecter
+                        </Text>
+
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Numéro de téléphone"
+                            value={phoneNumber}
+                            onChangeText={setPhoneNumber}
+                            keyboardType="phone-pad"
+                        />
+
+                        <TouchableOpacity
+                            style={styles.button}
+                            onPress={handleLogin}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.buttonText}>Se connecter</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                )}
             </View>
         </KeyboardAvoidingView>
     );
@@ -205,74 +275,78 @@ const AuthScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: '#f5f5f5',
         justifyContent: 'center',
-        backgroundColor: '#F5F5F5',
+        alignItems: 'center',
         padding: 20,
     },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
+    content: {
+        width: '100%',
+        maxWidth: 400,
         alignItems: 'center',
-        backgroundColor: '#F5F5F5',
-    },
-    loadingText: {
-        marginTop: 10,
-        fontSize: 16,
-    },
-    logoContainer: {
-        alignItems: 'center',
-        marginBottom: 50,
     },
     logo: {
         width: 120,
         height: 120,
-        borderRadius: 60,
+        marginBottom: 30,
+        resizeMode: 'contain',
     },
-    appName: {
-        fontSize: 28,
+    title: {
+        fontSize: 24,
         fontWeight: 'bold',
-        color: '#128C7E',
-        marginTop: 10,
-    },
-    tagline: {
-        fontSize: 16,
-        color: '#666',
-        marginTop: 5,
-    },
-    formContainer: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 10,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
-    },
-    inputLabel: {
-        fontSize: 16,
-        marginBottom: 5,
+        marginBottom: 20,
         color: '#333',
     },
-    input: {
-        backgroundColor: '#F5F5F5',
-        borderWidth: 1,
-        borderColor: '#DDD',
-        borderRadius: 8,
-        padding: 15,
+    subtitle: {
         fontSize: 16,
+        textAlign: 'center',
+        marginBottom: 20,
+        color: '#666',
+    },
+    inputContainer: {
+        width: '100%',
         marginBottom: 20,
     },
-    loginButton: {
-        backgroundColor: '#128C7E',
+    input: {
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        padding: 15,
+        marginBottom: 15,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        fontSize: 16,
+    },
+    button: {
+        backgroundColor: '#007BFF',
         borderRadius: 8,
         padding: 15,
         alignItems: 'center',
+        marginTop: 10,
     },
-    loginButtonText: {
-        color: '#FFFFFF',
-        fontSize: 16,
+    buttonText: {
+        color: '#fff',
         fontWeight: 'bold',
+        fontSize: 16,
+    },
+    loadingText: {
+        marginTop: 20,
+        fontSize: 16,
+        color: '#666',
+    },
+    phoneLabel: {
+        fontSize: 16,
+        marginBottom: 15,
+        fontWeight: 'bold',
+        color: '#555',
+    },
+    secondaryButton: {
+        padding: 15,
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    secondaryButtonText: {
+        color: '#007BFF',
+        fontSize: 16,
     },
 });
 

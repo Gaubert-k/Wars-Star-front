@@ -1,181 +1,414 @@
+// screens/ConversationScreen.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert
+  Alert,
+  FlatList,
+  SafeAreaView,
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import MessageList from '../components/MessageList';
-import {getMessages, sendMessage, checkUserExists} from '../services/api'; // Utilisation correcte de l'API
+import { getMessages, sendMessage, checkUserExists } from '../services/api';
 
 const ConversationScreen = ({ route, navigation }) => {
   const { contact, userPhone } = route.params;
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const messageInputRef = useRef(null);
+  const flatListRef = useRef(null);
 
-
+  // Configurer l'en-tête de navigation
   useEffect(() => {
-    // Configurer la barre de navigation
-
     navigation.setOptions({
-      title: `${contact.first_name} ${contact.last_name}`,
+      title: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || contact.phone_friend,
       headerLeft: () => (
           <TouchableOpacity
-              style={{ marginLeft: 10 }}
+              style={{ marginLeft: 15 }}
               onPress={() => navigation.goBack()}
           >
             <Ionicons name="arrow-back" size={24} color="#075E54" />
           </TouchableOpacity>
       ),
     });
+  }, [navigation, contact]);
 
-    fetchUserInfo();
+  // Charger les données au montage
+  useEffect(() => {
+    const initialize = async () => {
+      await Promise.all([
+        fetchUserInfo(),
+        fetchMessages()
+      ]);
+    };
 
-    // Charger les messages
-    fetchMessages();
+    initialize();
+
+    // Configurer l'intervalle de rafraîchissement
+    const intervalId = setInterval(() => {
+      if (!sending && !refreshing) {
+        fetchMessages(false);
+      }
+    }, 10000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
+  // Récupérer les informations de l'utilisateur
   const fetchUserInfo = async () => {
     try {
       const result = await checkUserExists(userPhone);
-      if (result.exists) {
+      if (result && result.user) {
         setUserInfo(result.user);
+      } else {
+        setUserInfo({
+          first_name: 'Utilisateur',
+          last_name: '',
+          phone: userPhone
+        });
       }
     } catch (error) {
       console.error('Erreur lors de la récupération des infos utilisateur:', error);
+      setUserInfo({
+        first_name: 'Utilisateur',
+        last_name: '',
+        phone: userPhone
+      });
     }
   };
 
-  const fetchMessages = async () => {
-    setLoading(true);
+  // Récupérer les messages de la conversation
+  const fetchMessages = async (showLoadingIndicator = true) => {
+    if (refreshing) return;
+
+    if (showLoadingIndicator) {
+      setLoading(true);
+    }
+    setRefreshing(true);
+
     try {
-      const messagesData = await getMessages(contact.phone_friend);
-      // Trier les messages du plus récent au plus ancien
-      const sortedMessages = messagesData.sort((a, b) =>
-          new Date(b.time) - new Date(a.time)
+      // Récupérer tous les messages
+      const allMessages = await getMessages(userPhone);
+
+      // Filtrer les messages de cette conversation
+      const conversationMessages = allMessages.filter(msg =>
+          (msg.sender === userPhone && msg.receiver === contact.phone_friend) ||
+          (msg.receiver === userPhone && msg.sender === contact.phone_friend)
       );
-      setMessages(sortedMessages);
+
+      // Trier du plus récent au plus ancien
+      conversationMessages.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+      setMessages(conversationMessages);
     } catch (error) {
-      console.error('Erreur lors de la récupération des messages :', error);
-      Alert.alert('Erreur', 'Impossible de charger les messages');
+      console.error('Erreur lors de la récupération des messages:', error);
+
+      // Si l'erreur est 404, ce n'est pas vraiment une erreur mais juste qu'il n'y a pas de messages
+      if (error.response && error.response.status === 404) {
+        console.log('Aucun message trouvé - API renvoie 404');
+        // Important: si la réponse est 404, on considère qu'il n'y a pas de messages plutôt qu'une erreur
+        setMessages([]);
+      } else {
+        // Pour les autres erreurs, afficher une alerte uniquement si c'est un premier chargement
+        if (showLoadingIndicator && messages.length === 0) {
+          Alert.alert(
+              'Erreur de chargement',
+              'Impossible de charger les messages. Vérifiez votre connexion réseau.'
+          );
+        }
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
 
+    setSending(true);
+    const messageText = newMessage.trim();
+    setNewMessage('');
+
     try {
-      // Format attendu par l'API
+      // S'assurer que les champs obligatoires sont présents
       const messageData = {
-        message: newMessage,
+        message: messageText,
         sender: userPhone,
-        first_name: userInfo ? userInfo.first_name : 'Utilisateur',
-        last_name: userInfo ? userInfo.last_name : '',
         receiver: contact.phone_friend
       };
+
+      console.log('Envoi du message avec les données:', messageData);
 
       // Envoyer le message
       await sendMessage(messageData);
 
-      // Ajouter le message à la liste locale
-      const sentMessage = {
-        ...messageData,
-        time: new Date(),
-        _id: Date.now().toString() // ID temporaire
-      };
-
-      setMessages([sentMessage, ...messages]);
-      setNewMessage('');
-
-      // Rafraîchir les messages pour obtenir l'ID réel du serveur
-      fetchMessages();
+      // Rafraîchir les messages
+      await fetchMessages(false);
     } catch (error) {
-      console.error('Erreur lors de l\'envoi du message :', error);
-      Alert.alert('Erreur', 'Impossible d\'envoyer le message');
+      console.error('Erreur lors de l\'envoi du message:', error);
+      Alert.alert(
+          'Erreur d\'envoi',
+          'Le message n\'a pas pu être envoyé. Veuillez réessayer.'
+      );
+      // Remettre le message dans le champ de texte
+      setNewMessage(messageText);
+    } finally {
+      setSending(false);
     }
   };
 
-  return (
-      <KeyboardAvoidingView
-          style={styles.container}
-          behavior={Platform.OS === 'ios' ? 'padding' : null}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#075E54" />
-            </View>
-        ) : (
-            <MessageList messages={messages} userPhone={userPhone} />
-        )}
+  // Formater la date du message
+  const formatMessageTime = (timeString) => {
+    try {
+      const date = new Date(timeString);
+      const now = new Date();
+      const isToday = date.toDateString() === now.toDateString();
 
-        <View style={styles.inputContainer}>
-          <TextInput
-              style={styles.textInput}
-              value={newMessage}
-              onChangeText={setNewMessage}
-              placeholder="Écrivez un message..."
-              multiline
-              ref={messageInputRef}
-          />
-          <TouchableOpacity
-              style={styles.sendButton}
-              onPress={handleSendMessage}
-              disabled={!newMessage.trim()}
-          >
-            <Ionicons
-                name="send"
-                size={24}
-                color={newMessage.trim() ? "#075E54" : "#CCCCCC"}
-            />
-          </TouchableOpacity>
+      if (isToday) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } else {
+        return date.toLocaleDateString([], {
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+    } catch (error) {
+      return 'Heure inconnue';
+    }
+  };
+
+  // Rendu des éléments de message
+  const renderMessageItem = ({ item }) => {
+    const isSentByMe = item.sender === userPhone;
+
+    return (
+        <View style={[
+          styles.messageContainer,
+          isSentByMe ? styles.sentMessageContainer : styles.receivedMessageContainer
+        ]}>
+          <View style={[
+            styles.messageBubble,
+            isSentByMe ? styles.sentMessageBubble : styles.receivedMessageBubble,
+            item.pending && styles.pendingMessage,
+            item.error && styles.errorMessage
+          ]}>
+            <Text style={styles.messageText}>{item.message}</Text>
+            <View style={styles.messageFooter}>
+              <Text style={styles.messageTime}>
+                {formatMessageTime(item.time)}
+              </Text>
+              {item.pending && <Ionicons name="time-outline" size={14} color="#888" style={styles.statusIcon} />}
+              {item.error && <Ionicons name="alert-circle-outline" size={14} color="#ff4040" style={styles.statusIcon} />}
+              {!item.pending && !item.error && isSentByMe && <Ionicons name="checkmark-done" size={14} color="#0084ff" style={styles.statusIcon} />}
+            </View>
+          </View>
         </View>
-      </KeyboardAvoidingView>
+    );
+  };
+
+  // Extraire la clé pour FlatList
+  const keyExtractor = (item) => {
+    return item._id || `${item.sender}_${item.time}`;
+  };
+
+  // Rafraîchir sur glissement vers le bas
+  const handleRefresh = () => {
+    fetchMessages(false);
+  };
+
+  return (
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.container}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        >
+          {loading && messages.length === 0 ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#075E54" />
+                <Text style={styles.loadingText}>Chargement des messages...</Text>
+              </View>
+          ) : (
+              <FlatList
+                  ref={flatListRef}
+                  data={messages}
+                  renderItem={renderMessageItem}
+                  keyExtractor={keyExtractor}
+                  inverted
+                  contentContainerStyle={styles.messagesContainer}
+                  refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={handleRefresh}
+                        colors={['#075E54']}
+                        tintColor="#075E54"
+                    />
+                  }
+                  ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                      <Ionicons name="chatbubble-ellipses-outline" size={80} color="#075E54" />
+                      <Text style={styles.emptyText}>Aucun message</Text>
+                      <Text style={styles.emptySubText}>Commencez la conversation !</Text>
+                    </View>
+                  }
+              />
+          )}
+
+          <View style={styles.inputContainer}>
+            <TextInput
+                ref={messageInputRef}
+                style={styles.input}
+                placeholder="Écrivez un message..."
+                value={newMessage}
+                onChangeText={setNewMessage}
+                multiline
+                maxLength={500}
+            />
+            <TouchableOpacity
+                style={[styles.sendButton, !newMessage.trim() && styles.disabledButton]}
+                onPress={handleSendMessage}
+                disabled={!newMessage.trim() || sending}
+            >
+              {sending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                  <Ionicons name="send" size={24} color="white" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E4DDD6',
+    backgroundColor: '#ECE5DD',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#075E54',
+  },
+  messagesContainer: {
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+  },
+  messageContainer: {
+    marginVertical: 5,
+    maxWidth: '80%',
+    alignSelf: 'flex-start',
+  },
+  sentMessageContainer: {
+    alignSelf: 'flex-end',
+  },
+  receivedMessageContainer: {
+    alignSelf: 'flex-start',
+  },
+  messageBubble: {
+    padding: 10,
+    borderRadius: 15,
+    minWidth: 80,
+  },
+  sentMessageBubble: {
+    backgroundColor: '#DCF8C6',
+    borderTopRightRadius: 5,
+  },
+  receivedMessageBubble: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 5,
+  },
+  pendingMessage: {
+    opacity: 0.8,
+  },
+  errorMessage: {
+    backgroundColor: '#ffebee',
+  },
+  messageText: {
+    fontSize: 16,
+    color: '#000',
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  messageTime: {
+    fontSize: 12,
+    color: '#666',
+  },
+  statusIcon: {
+    marginLeft: 5,
+  },
   inputContainer: {
     flexDirection: 'row',
-    padding: 10,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    backgroundColor: '#F5F5F5',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
     alignItems: 'center',
   },
-  textInput: {
+  input: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+    backgroundColor: 'white',
     borderRadius: 20,
-    padding: 10,
-    maxHeight: 100,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginRight: 10,
     fontSize: 16,
+    maxHeight: 100,
   },
   sendButton: {
-    marginLeft: 10,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 45,
+    height: 45,
+    borderRadius: 25,
+    backgroundColor: '#075E54',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#90A4AE',
+    opacity: 0.7,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    height: 300,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#075E54',
+    marginTop: 20,
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 10,
+    textAlign: 'center',
   },
 });
 
